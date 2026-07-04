@@ -1,0 +1,21 @@
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: thefresh
+      POSTGRES_PASSWORD: thefresh
+      POSTGRES_DB: thefresh
+    ports:
+      - '5434:5432'
+    volumes:
+      - thefresh_db_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - '6381:6379'
+
+volumes:
+  thefresh_db_data:

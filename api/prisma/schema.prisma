@@ -1,0 +1,405 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ── Enums ──────────────────────────────────────────────
+
+enum UserRole {
+  CUSTOMER
+  ADMIN
+  STORE
+  RIDER
+}
+
+// How a variant is sold — drives pricing, picking, checkout, adjustment.
+// See docs/catalog-design.md §1.1.
+enum SellingType {
+  UNIT
+  WEIGHT
+  VOLUME
+  PACK
+  BUNDLE
+}
+
+enum ProductStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+enum AttributeType {
+  TEXT
+  NUMBER
+  BOOLEAN
+  SELECT
+  MULTI_SELECT
+}
+
+enum StockMovementType {
+  RECEIVE
+  ADJUST
+  RESERVE
+  RELEASE
+  DEDUCT
+}
+
+enum OrderStatus {
+  PLACED
+  ACCEPTED
+  REJECTED
+  PROCESSING
+  WEIGHING
+  AWAITING_APPROVAL
+  AWAITING_PAYMENT
+  PAID
+  OUT_FOR_DELIVERY
+  DELIVERED
+  DELIVERY_FAILED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  COD
+  CARD
+  APPLE_PAY
+  GOOGLE_PAY
+  PAYMENT_LINK
+}
+
+// ── Users ──────────────────────────────────────────────
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  phone        String?
+  passwordHash String
+  name         String
+  role         UserRole @default(CUSTOMER)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+// ── Catalog: taxonomy ──────────────────────────────────
+
+model Store {
+  id       String         @id @default(cuid())
+  name     String
+  code     String         @unique
+  status   String         @default("ACTIVE")
+  listings StoreListing[]
+}
+
+model Category {
+  id         String              @id @default(cuid())
+  name       String
+  slug       String              @unique
+  imageUrl   String?
+  sortOrder  Int                 @default(0)
+  parentId   String?
+  parent     Category?           @relation("CategoryTree", fields: [parentId], references: [id])
+  children   Category[]          @relation("CategoryTree")
+  families   ProductFamily[]
+  attributes CategoryAttribute[]
+  createdAt  DateTime            @default(now())
+  updatedAt  DateTime            @updatedAt
+}
+
+model Brand {
+  id       String          @id @default(cuid())
+  name     String
+  slug     String          @unique
+  logoUrl  String?
+  families ProductFamily[]
+}
+
+// ── Catalog: products ──────────────────────────────────
+
+model ProductFamily {
+  id            String                  @id @default(cuid())
+  name          String
+  slug          String                  @unique
+  description   String?
+  specification String?
+  disclaimer    String?
+  status        ProductStatus           @default(DRAFT)
+  categoryId    String
+  category      Category                @relation(fields: [categoryId], references: [id])
+  brandId       String?
+  brand         Brand?                  @relation(fields: [brandId], references: [id])
+  variants      Variant[]
+  images        ProductImage[]
+  attributes    ProductAttributeValue[]
+  prepOptions   PreparationOption[]
+  createdAt     DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
+}
+
+model Variant {
+  id               String                @id @default(cuid())
+  familyId         String
+  family           ProductFamily         @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  sku              String                @unique
+  barcode          String?               @unique
+  name             String
+  sellingType      SellingType
+  netContentValue  Int?
+  netContentUnit   String?
+  status           ProductStatus         @default(ACTIVE)
+  sortOrder        Int                   @default(0)
+  weightRule       WeightRule?
+  weightOptions    VariantWeightOption[]
+  bundleComponents BundleComponent[]     @relation("BundleParent")
+  usedInBundles    BundleComponent[]     @relation("BundleChild")
+  listings         StoreListing[]
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+}
+
+model WeightRule {
+  variantId          String  @id
+  variant            Variant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  displayWeightGrams Int?
+  wastePercent       Int?
+}
+
+model VariantWeightOption {
+  id              String  @id @default(cuid())
+  variantId       String
+  variant         Variant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  weightGrams     Int
+  modifierPercent Int     @default(0)
+  label           String?
+}
+
+model BundleComponent {
+  id                 String  @id @default(cuid())
+  bundleVariantId    String
+  bundleVariant      Variant @relation("BundleParent", fields: [bundleVariantId], references: [id], onDelete: Cascade)
+  componentVariantId String
+  componentVariant   Variant @relation("BundleChild", fields: [componentVariantId], references: [id])
+  quantity           Int
+}
+
+model ProductImage {
+  id        String        @id @default(cuid())
+  familyId  String
+  family    ProductFamily @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  variantId String?
+  url       String
+  sortOrder Int           @default(0)
+  isPrimary Boolean       @default(false)
+}
+
+model PreparationOption {
+  id         String        @id @default(cuid())
+  familyId   String
+  family     ProductFamily @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  name       String
+  chargeFils Int           @default(0)
+}
+
+// ── Catalog: attributes ────────────────────────────────
+
+model AttributeDefinition {
+  id         String                  @id @default(cuid())
+  code       String                  @unique
+  label      String
+  type       AttributeType
+  unit       String?
+  options    Json?
+  filterable Boolean                 @default(false)
+  categories CategoryAttribute[]
+  values     ProductAttributeValue[]
+}
+
+model CategoryAttribute {
+  categoryId  String
+  category    Category            @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  attributeId String
+  attribute   AttributeDefinition @relation(fields: [attributeId], references: [id], onDelete: Cascade)
+  required    Boolean             @default(false)
+  sortOrder   Int                 @default(0)
+
+  @@id([categoryId, attributeId])
+}
+
+model ProductAttributeValue {
+  familyId    String
+  family      ProductFamily       @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  attributeId String
+  attribute   AttributeDefinition @relation(fields: [attributeId], references: [id], onDelete: Cascade)
+  value       Json
+
+  @@id([familyId, attributeId])
+}
+
+// ── Store operations ───────────────────────────────────
+
+model StoreListing {
+  id                 String          @id @default(cuid())
+  storeId            String
+  store              Store           @relation(fields: [storeId], references: [id])
+  variantId          String
+  variant            Variant         @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  enabled            Boolean         @default(true)
+  priceFils          Int
+  compareAtPriceFils Int?
+  costPriceFils      Int?
+  onHandQty          Int             @default(0)
+  reservedQty        Int             @default(0)
+  lowStockThreshold  Int             @default(0)
+  movements          StockMovement[]
+  updatedAt          DateTime        @updatedAt
+
+  @@unique([storeId, variantId])
+}
+
+model StockMovement {
+  id        String            @id @default(cuid())
+  listingId String
+  listing   StoreListing      @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  type      StockMovementType
+  qtyDelta  Int
+  reason    String?
+  orderId   String?
+  actorId   String
+  createdAt DateTime          @default(now())
+}
+
+// ── Orders (unchanged skeleton from Pass 1) ────────────
+
+model Order {
+  id               String                 @id @default(cuid())
+  customerId       String
+  status           OrderStatus            @default(PLACED)
+  deliverySnapshot OrderDeliverySnapshot?
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+}
+
+model OrderStatusHistory {
+  id        String      @id @default(cuid())
+  orderId   String
+  from      OrderStatus
+  to        OrderStatus
+  actorId   String
+  actorRole String
+  reason    String?
+  createdAt DateTime    @default(now())
+}
+
+// ── Delivery: geography ────────────────────────────────
+// See docs/delivery-design.md — full Country/City hierarchy from day one,
+// same "pay now, save later" reasoning as the single Store model.
+
+model Country {
+  id     String  @id @default(cuid())
+  name   String
+  code   String  @unique // ISO alpha-2, e.g. "AE"
+  active Boolean @default(true)
+  cities City[]
+}
+
+model City {
+  id        String  @id @default(cuid())
+  countryId String
+  country   Country @relation(fields: [countryId], references: [id])
+  name      String
+  active    Boolean @default(true)
+  zones     Zone[]
+}
+
+// Operational unit. Deliberately not linked to Store/warehouse
+// (see docs/delivery-design.md §1.1).
+model Zone {
+  id     String  @id @default(cuid())
+  cityId String
+  city   City    @relation(fields: [cityId], references: [id])
+  name   String
+  active Boolean @default(true)
+
+  areas       Area[]
+  methodZones DeliveryMethodZone[]
+  slots       DeliverySlot[]
+}
+
+// Customer-facing location — what the address picker shows.
+model Area {
+  id     String  @id @default(cuid())
+  zoneId String
+  zone   Zone    @relation(fields: [zoneId], references: [id])
+  name   String
+  active Boolean @default(true)
+}
+
+// ── Delivery: methods ───────────────────────────────────
+// See docs/delivery-design.md §1.2 — the central object. Fee, minimum
+// order, free-delivery threshold, and ETA all live here directly; there is
+// no per-zone config row.
+
+model DeliveryMethod {
+  id                       String  @id @default(cuid())
+  name                     String
+  code                     String  @unique
+  description              String?
+  active                   Boolean @default(true)
+  feeFils                  Int
+  minimumOrderAmountFils   Int     @default(0)
+  freeDeliveryAboveFils    Int?
+  estimatedDeliveryMinutes Int? // null for slot-based methods
+
+  zones DeliveryMethodZone[]
+  slots DeliverySlot[]
+}
+
+// Presence of a row = this method is restricted to this zone. A method
+// with zero rows is available everywhere (the default). See §1.3.
+model DeliveryMethodZone {
+  id               String         @id @default(cuid())
+  deliveryMethodId String
+  deliveryMethod   DeliveryMethod @relation(fields: [deliveryMethodId], references: [id], onDelete: Cascade)
+  zoneId           String
+  zone             Zone           @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+
+  @@unique([deliveryMethodId, zoneId])
+}
+
+// Recurring daily slot template, belongs to a method. zoneId null = generic
+// (applies to every zone the method is available in); set = override for
+// that one zone. See §1.4.
+model DeliverySlot {
+  id               String         @id @default(cuid())
+  deliveryMethodId String
+  deliveryMethod   DeliveryMethod @relation(fields: [deliveryMethodId], references: [id], onDelete: Cascade)
+  zoneId           String?
+  zone             Zone?          @relation(fields: [zoneId], references: [id])
+  name             String?
+  startMinute      Int // minutes from midnight, e.g. 480 = 08:00
+  endMinute        Int // e.g. 600 = 10:00
+  capacity         Int
+  bookedCount      Int            @default(0)
+  active           Boolean        @default(true)
+}
+
+// Frozen at order placement — never re-derive from live config (see
+// docs/delivery-design.md §1.7). deliveryAddress is plain text until a
+// real Address model exists.
+model OrderDeliverySnapshot {
+  orderId         String    @id
+  order           Order     @relation(fields: [orderId], references: [id])
+  methodName      String
+  zoneName        String
+  areaName        String
+  deliveryFeeFils Int
+  etaMinutes      Int?
+  slotDate        DateTime?
+  slotStart       Int?
+  slotEnd         Int?
+  deliveryAddress String
+  createdAt       DateTime  @default(now())
+}
