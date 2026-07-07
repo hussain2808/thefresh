@@ -330,9 +330,27 @@ model Order {
   id               String                 @id @default(cuid())
   customerId       String
   status           OrderStatus            @default(PLACED)
+  subtotalFils     Int
+  items            OrderItem[]
   deliverySnapshot OrderDeliverySnapshot?
   createdAt        DateTime               @default(now())
   updatedAt        DateTime               @updatedAt
+}
+
+// Snapshot of a cart line at checkout — variantId/storeId/prepOptionId are
+// intentionally bare (no FK), same convention as StockMovement.actorId, since
+// the estimated price is what matters here, not live joins back to catalog.
+model OrderItem {
+  id                 String   @id @default(cuid())
+  orderId            String
+  order              Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  variantId          String
+  storeId            String
+  quantity           Int?
+  weightGrams        Int?
+  prepOptionId       String?
+  estimatedPriceFils Int
+  createdAt          DateTime @default(now())
 }
 
 model OrderStatusHistory {
@@ -464,20 +482,20 @@ model OrderDeliverySnapshot {
 // additive, not a redesign.
 
 model Promotion {
-  id          String            @id @default(cuid())
+  id          String               @id @default(cuid())
   name        String
   description String?
   type        PromotionType
-  status      PromotionStatus   @default(DRAFT)
+  status      PromotionStatus      @default(DRAFT)
   startAt     DateTime?
   endAt       DateTime?
-  priority    Int               @default(0)
-  isActive    Boolean           @default(true)
+  priority    Int                  @default(0)
+  isActive    Boolean              @default(true)
   conditions  PromotionCondition[]
   rewards     PromotionReward[]
   coupon      Coupon?
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
 }
 
 model PromotionCondition {

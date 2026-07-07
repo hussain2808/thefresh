@@ -64,6 +64,8 @@ Two independent login paths, both issuing the same access + refresh JWT pair (`P
 - **Back office (ADMIN/STORE/RIDER)** — `POST /auth/login` with email + password, used by the `admin/` portal.
 - **Customers (Flutter app)** — `POST /auth/firebase` with a Firebase ID token. The phone number is verified client-side via Firebase Phone Auth (SMS OTP); the API only verifies the resulting token (`api/src/modules/auth/firebase`) and upserts the `CUSTOMER` user by phone/Firebase UID. Catalog browsing stays unauthenticated — login is only enforced at checkout.
 
+Cart is guest-accessible (keyed by a client-generated `X-Cart-Id` header) and validates every add/update against the pricing engine. Checkout (`POST /orders/checkout`) is the one place auth is enforced — `JwtAuthGuard` + `@Roles(CUSTOMER)` — where it snapshots the cart's live-priced items into an `Order` + `OrderItem`s and clears the cart. Delivery fee and coupon/promotion redemption aren't wired into checkout yet.
+
 ## Status
 
-Auth (including refresh tokens + Firebase phone-OTP login), catalog (products/categories), stores, delivery, and the pricing engine are implemented with test coverage. Admin portal covers products + categories. Everything else (cart, orders, weight-adjustment, payments, invoicing, notifications, reporting) is still scaffold-only.
+Auth (including refresh tokens + Firebase phone-OTP login), catalog (products/categories), stores, delivery, pricing, promotions/coupons, and a first pass of cart + checkout are implemented with test coverage. Admin portal covers products + categories. Everything else (weight-adjustment, payments, invoicing, notifications, reporting, and order-status transitions beyond initial placement) is still scaffold-only.
