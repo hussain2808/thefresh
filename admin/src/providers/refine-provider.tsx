@@ -15,6 +15,7 @@ import {
   PackageSearch,
   Store,
   Tags,
+  Ticket,
   Truck,
 } from "lucide-react";
 import { dataProvider } from "./data-provider";
@@ -120,6 +121,17 @@ function RefineApp({ children }: { children: React.ReactNode }) {
           name: "delivery-slots",
           list: "/delivery/slots",
           meta: { label: "Slot Management", icon: <Clock size={16} />, parent: "delivery" },
+        },
+        {
+          name: "promotions",
+          meta: { label: "Promotions" },
+        },
+        {
+          name: "coupons",
+          list: "/promotions/coupons",
+          create: "/promotions/coupons/create",
+          edit: "/promotions/coupons/:id/edit",
+          meta: { label: "Coupons", icon: <Ticket size={16} />, parent: "promotions" },
         },
       ]}
       options={{ syncWithLocation: true, warnWhenUnsavedChanges: false, disableTelemetry: true }}

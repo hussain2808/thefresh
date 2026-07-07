@@ -353,9 +353,30 @@ async function main() {
     ],
   });
 
+  // ── Promotions: one example coupon (see docs/promotions-design.md) ─
+  // WELCOME20 — 20% off, capped at AED 15, first order only.
+  await prisma.promotion.create({
+    data: {
+      name: 'Welcome Discount',
+      description: '20% off your first order, up to AED 15.',
+      type: 'COUPON',
+      status: 'ACTIVE',
+      conditions: {
+        create: [{ conditionType: 'FIRST_ORDER', operator: '=', value: true }],
+      },
+      rewards: {
+        create: [{ rewardType: 'PERCENTAGE_DISCOUNT', value: 20, maxDiscountFils: 1500 }],
+      },
+      coupon: {
+        create: { code: 'WELCOME20', perUserLimit: 1 },
+      },
+    },
+  });
+
   console.log(
     'Seed complete: 1 store, 10 categories, 2 brands, 4 attributes, 5 families, 7 variants + listings/stock; ' +
-      '1 country, 1 city, 3 zones, 9 areas, 3 delivery methods (1 zone-restricted), 5 slots (2 zone overrides).',
+      '1 country, 1 city, 3 zones, 9 areas, 3 delivery methods (1 zone-restricted), 5 slots (2 zone overrides); ' +
+      '1 coupon (WELCOME20).',
   );
 }
 

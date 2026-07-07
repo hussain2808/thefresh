@@ -71,6 +71,43 @@ enum PaymentMethod {
   PAYMENT_LINK
 }
 
+enum PromotionType {
+  COUPON
+  CASHBACK
+}
+
+enum PromotionStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  EXPIRED
+}
+
+// See docs/promotions-design.md §4 — CATEGORY/PRODUCT/BRAND/
+// CUSTOMER_SEGMENT/PAYMENT_METHOD/ORDER_COUNT exist here so a future
+// migration isn't needed to add them, but aren't evaluated in V1.
+enum PromotionConditionType {
+  MIN_ORDER_VALUE
+  ZONE
+  AREA
+  DELIVERY_METHOD
+  FIRST_ORDER
+  CATEGORY
+  PRODUCT
+  BRAND
+  CUSTOMER_SEGMENT
+  PAYMENT_METHOD
+  ORDER_COUNT
+}
+
+enum PromotionRewardType {
+  FIXED_DISCOUNT
+  PERCENTAGE_DISCOUNT
+  FREE_DELIVERY
+  CASHBACK_FIXED
+  CASHBACK_PERCENTAGE
+}
+
 // ── Users ──────────────────────────────────────────────
 
 model User {
@@ -402,4 +439,68 @@ model OrderDeliverySnapshot {
   slotEnd         Int?
   deliveryAddress String
   createdAt       DateTime  @default(now())
+}
+
+// ── Promotions: Coupon Engine ──────────────────────────
+// See docs/promotions-design.md. Promotion is the shared core for
+// Coupons (now) and Cashback (later, deferred) — generic
+// condition/reward rows so adding Cashback/Loyalty/Referral later is
+// additive, not a redesign.
+
+model Promotion {
+  id          String            @id @default(cuid())
+  name        String
+  description String?
+  type        PromotionType
+  status      PromotionStatus   @default(DRAFT)
+  startAt     DateTime?
+  endAt       DateTime?
+  priority    Int               @default(0)
+  isActive    Boolean           @default(true)
+  conditions  PromotionCondition[]
+  rewards     PromotionReward[]
+  coupon      Coupon?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+}
+
+model PromotionCondition {
+  id            String                 @id @default(cuid())
+  promotionId   String
+  promotion     Promotion              @relation(fields: [promotionId], references: [id], onDelete: Cascade)
+  conditionType PromotionConditionType
+  operator      String // ">=", "=", "IN" — interpreted per conditionType
+  value         Json
+}
+
+model PromotionReward {
+  id              String              @id @default(cuid())
+  promotionId     String
+  promotion       Promotion           @relation(fields: [promotionId], references: [id], onDelete: Cascade)
+  rewardType      PromotionRewardType
+  value           Int // fils for FIXED_*, integer percent for PERCENTAGE_*
+  maxDiscountFils Int?
+}
+
+// Coupon-specific fields, 1:1 with a `type = COUPON` Promotion.
+model Coupon {
+  promotionId  String    @id
+  promotion    Promotion @relation(fields: [promotionId], references: [id], onDelete: Cascade)
+  code         String    @unique
+  usageLimit   Int?
+  perUserLimit Int?
+  stackable    Boolean   @default(false)
+}
+
+// Not yet written to — see docs/promotions-design.md §3. Persisted once
+// the Orders module exists to redeem against; kept in the schema now so
+// usage-limit counting logic can be built and tested against it.
+model CouponRedemption {
+  id                 String   @id @default(cuid())
+  promotionId        String
+  couponCode         String
+  customerId         String
+  orderId            String?
+  discountAmountFils Int
+  redeemedAt         DateTime @default(now())
 }
