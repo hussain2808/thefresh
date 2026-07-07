@@ -32,10 +32,11 @@ src/
 │
 ├── modules/
 │   │
-│   ├── auth/                        # JWT auth, RBAC (customer/admin/store/rider)
+│   ├── auth/                        # JWT auth (access + refresh), RBAC (customer/admin/store/rider)
 │   │   ├── auth.module.ts
 │   │   ├── auth.service.ts
 │   │   ├── auth.controller.ts
+│   │   ├── firebase/                # Verifies Firebase ID tokens (customer phone-OTP login)
 │   │   └── strategies/
 │   │
 │   ├── users/                       # Customers, addresses, admin users
