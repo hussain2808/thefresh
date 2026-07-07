@@ -111,14 +111,30 @@ enum PromotionRewardType {
 // ── Users ──────────────────────────────────────────────
 
 model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  phone        String?
-  passwordHash String
-  name         String
-  role         UserRole @default(CUSTOMER)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id            String         @id @default(cuid())
+  email         String?        @unique
+  phone         String?        @unique
+  passwordHash  String?
+  firebaseUid   String?        @unique
+  name          String
+  role          UserRole       @default(CUSTOMER)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  refreshTokens RefreshToken[]
+}
+
+// Opaque, rotating refresh tokens for mobile/web sessions. Only the hash is
+// stored — the raw token is returned to the client once, at issuance.
+model RefreshToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
 }
 
 // ── Catalog: taxonomy ──────────────────────────────────

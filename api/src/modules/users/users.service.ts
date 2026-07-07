@@ -6,7 +6,14 @@ import { PrismaService } from '../../prisma/prisma.service';
 export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
 
-  create(data: { email: string; passwordHash: string; name: string; phone?: string; role?: UserRole }): Promise<User> {
+  create(data: {
+    email?: string;
+    passwordHash?: string;
+    phone?: string;
+    firebaseUid?: string;
+    name: string;
+    role?: UserRole;
+  }): Promise<User> {
     return this.prisma.user.create({ data });
   }
 
@@ -14,7 +21,19 @@ export class UsersService {
     return this.prisma.user.findUnique({ where: { email } });
   }
 
+  findByPhone(phone: string): Promise<User | null> {
+    return this.prisma.user.findUnique({ where: { phone } });
+  }
+
+  findByFirebaseUid(firebaseUid: string): Promise<User | null> {
+    return this.prisma.user.findUnique({ where: { firebaseUid } });
+  }
+
   findById(id: string): Promise<User | null> {
     return this.prisma.user.findUnique({ where: { id } });
+  }
+
+  linkFirebaseUid(id: string, firebaseUid: string): Promise<User> {
+    return this.prisma.user.update({ where: { id }, data: { firebaseUid } });
   }
 }

@@ -57,6 +57,13 @@ Two non-negotiable conventions in the API:
 | `notifications` | Push (FCM), WhatsApp (Phase 2) |
 | `reporting` | Sales, revenue, weight variance, performance |
 
+## Authentication
+
+Two independent login paths, both issuing the same access + refresh JWT pair (`POST /auth/refresh` rotates a refresh token; `POST /auth/logout` revokes one):
+
+- **Back office (ADMIN/STORE/RIDER)** — `POST /auth/login` with email + password, used by the `admin/` portal.
+- **Customers (Flutter app)** — `POST /auth/firebase` with a Firebase ID token. The phone number is verified client-side via Firebase Phone Auth (SMS OTP); the API only verifies the resulting token (`api/src/modules/auth/firebase`) and upserts the `CUSTOMER` user by phone/Firebase UID. Catalog browsing stays unauthenticated — login is only enforced at checkout.
+
 ## Status
 
-Auth, catalog (products/categories), and the pricing engine are implemented with test coverage. Admin portal covers products + categories. Everything else (cart, orders, weight-adjustment, payments, delivery, notifications, reporting) is still scaffold-only.
+Auth (including refresh tokens + Firebase phone-OTP login), catalog (products/categories), stores, delivery, and the pricing engine are implemented with test coverage. Admin portal covers products + categories. Everything else (cart, orders, weight-adjustment, payments, invoicing, notifications, reporting) is still scaffold-only.
