@@ -16,6 +16,7 @@ const RESOURCE_PATHS: Record<string, string> = {
   "delivery-methods": "delivery/methods",
   "delivery-slots": "delivery/slots",
   coupons: "promotions/coupons",
+  orders: "orders",
 };
 
 function resourcePath(resource: string): string {

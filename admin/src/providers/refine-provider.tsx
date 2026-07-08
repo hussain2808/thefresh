@@ -13,6 +13,7 @@ import {
   Map,
   MapPin,
   PackageSearch,
+  ReceiptText,
   Store,
   Tags,
   Ticket,
@@ -121,6 +122,12 @@ function RefineApp({ children }: { children: React.ReactNode }) {
           name: "delivery-slots",
           list: "/delivery/slots",
           meta: { label: "Slot Management", icon: <Clock size={16} />, parent: "delivery" },
+        },
+        {
+          name: "orders",
+          list: "/orders",
+          show: "/orders/:id",
+          meta: { label: "Orders", icon: <ReceiptText size={16} /> },
         },
         {
           name: "promotions",
