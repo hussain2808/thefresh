@@ -331,6 +331,11 @@ model Order {
   customerId       String
   status           OrderStatus            @default(PLACED)
   subtotalFils     Int
+  // Frozen at checkout: subtotalFils - discount (see CouponRedemption,
+  // joined by orderId) + deliveryFeeFils (see OrderDeliverySnapshot).
+  // Never re-derive later — same snapshot-at-placement principle as
+  // OrderDeliverySnapshot itself.
+  totalFils        Int
   items            OrderItem[]
   deliverySnapshot OrderDeliverySnapshot?
   createdAt        DateTime               @default(now())
