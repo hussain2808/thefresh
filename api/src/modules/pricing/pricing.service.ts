@@ -5,6 +5,14 @@ import { selectWeightOption } from './weight-modifiers/weight-modifier.util';
 import { computeEstimatedPrice } from './pricing.util';
 import { Fils } from '../../common/types/money';
 
+export interface PriceBreakdown {
+  basePriceFils: Fils;
+  // Weight-tier modifier, null for non-WEIGHT selling types.
+  modifierPercent: number | null;
+  prepChargeFils: Fils;
+  estimatedPriceFils: Fils;
+}
+
 @Injectable()
 export class PricingService {
   constructor(private readonly prisma: PrismaService) {}
@@ -22,6 +30,22 @@ export class PricingService {
     quantity?: number;
     prepOptionId?: string;
   }): Promise<Fils> {
+    return (await this.resolveBreakdown(params)).estimatedPriceFils;
+  }
+
+  /**
+   * Same pricing as estimatePrice, but also returns the components the
+   * Weight Adjustment Engine needs to snapshot at checkout so it can
+   * recompute finalPriceFils from actualWeightGrams later without
+   * re-deriving from live catalog/store-listing state.
+   */
+  async resolveBreakdown(params: {
+    variantId: string;
+    storeId?: string;
+    weightGrams?: number;
+    quantity?: number;
+    prepOptionId?: string;
+  }): Promise<PriceBreakdown> {
     const variant = await this.prisma.variant.findUnique({
       where: { id: params.variantId },
       include: {
@@ -47,16 +71,27 @@ export class PricingService {
     if (variant.sellingType === SellingType.WEIGHT) {
       if (!params.weightGrams) throw new BadRequestException('weightGrams is required for WEIGHT variants');
       const weightOption = selectWeightOption(variant.weightOptions, params.weightGrams);
-      return computeEstimatedPrice({
+      const estimatedPriceFils = computeEstimatedPrice({
         basePriceFils: listing.priceFils,
         weightGrams: params.weightGrams,
         modifierPercent: weightOption.modifierPercent,
         prepChargeFils,
       });
+      return {
+        basePriceFils: listing.priceFils,
+        modifierPercent: weightOption.modifierPercent,
+        prepChargeFils,
+        estimatedPriceFils,
+      };
     }
 
     const quantity = params.quantity ?? 1;
     if (quantity < 1) throw new BadRequestException('quantity must be ≥ 1');
-    return listing.priceFils * quantity + prepChargeFils;
+    return {
+      basePriceFils: listing.priceFils,
+      modifierPercent: null,
+      prepChargeFils,
+      estimatedPriceFils: listing.priceFils * quantity + prepChargeFils,
+    };
   }
 }

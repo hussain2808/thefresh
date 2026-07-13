@@ -44,6 +44,7 @@ describe('OrdersService.checkout', () => {
   let cartService: { getCart: jest.Mock; clear: jest.Mock };
   let zoneDelivery: { resolveZoneForArea: jest.Mock };
   let coupons: { validate: jest.Mock };
+  let pricing: { resolveBreakdown: jest.Mock };
   let ordersService: OrdersService;
   let txDeliverySlotUpdateMany: jest.Mock;
   let txCouponRedemptionCreate: jest.Mock;
@@ -88,7 +89,21 @@ describe('OrdersService.checkout', () => {
       resolveZoneForArea: jest.fn().mockResolvedValue({ area: AREA, zone: ZONE, methods: [FLAT_METHOD, SLOT_METHOD] }),
     };
     coupons = { validate: jest.fn() };
-    ordersService = new OrdersService(prisma as any, cartService as any, zoneDelivery as any, coupons as any);
+    pricing = {
+      resolveBreakdown: jest.fn().mockResolvedValue({
+        basePriceFils: 20000,
+        modifierPercent: 5,
+        prepChargeFils: 500,
+        estimatedPriceFils: 12000,
+      }),
+    };
+    ordersService = new OrdersService(
+      prisma as any,
+      cartService as any,
+      zoneDelivery as any,
+      coupons as any,
+      pricing as any,
+    );
   });
 
   it('rejects checkout when the cart is empty', async () => {
@@ -226,6 +241,54 @@ describe('OrdersService.checkout', () => {
     });
     expect(cartService.clear).toHaveBeenCalledWith('cart-1');
     expect(order).toEqual({ id: 'order-1', status: OrderStatus.PLACED });
+  });
+
+  it('snapshots the price breakdown onto each order item for the Weight Adjustment Engine', async () => {
+    await ordersService.checkout('user-1', 'cart-1', baseDto());
+
+    expect(pricing.resolveBreakdown).toHaveBeenCalledWith({
+      variantId: 'variant-1',
+      storeId: 'store-1',
+      weightGrams: 500,
+      quantity: undefined,
+      prepOptionId: undefined,
+    });
+    expect(txOrderCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          items: {
+            create: [
+              expect.objectContaining({
+                basePriceFils: 20000,
+                weightModifierPercent: 5,
+                prepChargeFils: 500,
+              }),
+            ],
+          },
+        }),
+      }),
+    );
+  });
+
+  it('leaves basePriceFils/weightModifierPercent null for non-WEIGHT lines', async () => {
+    pricing.resolveBreakdown.mockResolvedValue({
+      basePriceFils: 3000,
+      modifierPercent: null,
+      prepChargeFils: 0,
+      estimatedPriceFils: 12000,
+    });
+
+    await ordersService.checkout('user-1', 'cart-1', baseDto());
+
+    expect(txOrderCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          items: {
+            create: [expect.objectContaining({ basePriceFils: null, weightModifierPercent: null })],
+          },
+        }),
+      }),
+    );
   });
 
   it('rejects when the slot no longer exists on the resolved method', async () => {

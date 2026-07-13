@@ -4,6 +4,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CartService } from '../cart/cart.service';
 import { ZoneDeliveryService } from '../delivery/zone-delivery.service';
 import { CouponsService } from '../promotions/coupons.service';
+import { PricingService } from '../pricing/pricing.service';
 import { CheckoutDto } from './dto/checkout.dto';
 
 @Injectable()
@@ -13,6 +14,7 @@ export class OrdersService {
     private readonly cartService: CartService,
     private readonly zoneDelivery: ZoneDeliveryService,
     private readonly coupons: CouponsService,
+    private readonly pricing: PricingService,
   ) {}
 
   async checkout(customerId: string, cartId: string, dto: CheckoutDto): Promise<Order> {
@@ -78,6 +80,21 @@ export class OrdersService {
 
     const totalFils = Math.max(0, cart.subtotalFils - discountFils + deliveryFeeFils);
 
+    // Snapshot the price breakdown (not just the total) so the Weight
+    // Adjustment Engine can recompute finalPriceFils from actualWeightGrams
+    // later without re-deriving from live catalog/store-listing state.
+    const breakdowns = await Promise.all(
+      cart.items.map((item) =>
+        this.pricing.resolveBreakdown({
+          variantId: item.variantId,
+          storeId: item.storeId,
+          weightGrams: item.weightGrams,
+          quantity: item.quantity,
+          prepOptionId: item.prepOptionId,
+        }),
+      ),
+    );
+
     const order = await this.prisma.$transaction(async (tx) => {
       const created = await tx.order.create({
         data: {
@@ -86,14 +103,21 @@ export class OrdersService {
           subtotalFils: cart.subtotalFils,
           totalFils,
           items: {
-            create: cart.items.map((item) => ({
-              variantId: item.variantId,
-              storeId: item.storeId,
-              quantity: item.quantity,
-              weightGrams: item.weightGrams,
-              prepOptionId: item.prepOptionId,
-              estimatedPriceFils: item.estimatedPriceFils,
-            })),
+            create: cart.items.map((item, index) => {
+              const breakdown = breakdowns[index];
+              const isWeightLine = breakdown.modifierPercent !== null;
+              return {
+                variantId: item.variantId,
+                storeId: item.storeId,
+                quantity: item.quantity,
+                weightGrams: item.weightGrams,
+                prepOptionId: item.prepOptionId,
+                estimatedPriceFils: item.estimatedPriceFils,
+                basePriceFils: isWeightLine ? breakdown.basePriceFils : null,
+                weightModifierPercent: isWeightLine ? breakdown.modifierPercent : null,
+                prepChargeFils: breakdown.prepChargeFils,
+              };
+            }),
           },
           deliverySnapshot: {
             create: {

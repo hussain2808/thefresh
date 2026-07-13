@@ -38,7 +38,15 @@ export interface OrderItem {
   prepOptionId: string | null;
   estimatedPriceFils: number;
   createdAt: string;
-  productName?: string; // present only on the detail (findOne) response
+  productName?: string; // resolved on both findAll and findOne
+  // WEIGHT lines only — snapshotted at checkout, set by the Weight Adjustment
+  // Engine once the store records actual weight (see POST .../weigh).
+  basePriceFils: number | null;
+  weightModifierPercent: number | null;
+  prepChargeFils: number;
+  actualWeightGrams: number | null;
+  finalPriceFils: number | null;
+  varianceBasisPoints: number | null;
 }
 
 export interface OrderDeliverySnapshot {
@@ -55,18 +63,31 @@ export interface OrderDeliverySnapshot {
   createdAt: string;
 }
 
+export interface OrderStatusHistoryEntry {
+  id: string;
+  orderId: string;
+  from: OrderStatus;
+  to: OrderStatus;
+  actorId: string;
+  actorRole: string;
+  reason: string | null;
+  createdAt: string;
+}
+
 export interface Order {
   id: string;
   customerId: string;
   status: OrderStatus;
   subtotalFils: number;
   totalFils: number;
+  finalTotalFils: number | null;
   createdAt: string;
   updatedAt: string;
   items: OrderItem[];
   deliverySnapshot: OrderDeliverySnapshot | null;
   customer: OrderCustomer | null;
   coupon: OrderCoupon | null;
+  history?: OrderStatusHistoryEntry[]; // present only on the detail (findOne) response
 }
 
 export function formatSlotTime(minutes: number): string {

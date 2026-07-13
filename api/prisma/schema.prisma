@@ -336,6 +336,9 @@ model Order {
   // Never re-derive later — same snapshot-at-placement principle as
   // OrderDeliverySnapshot itself.
   totalFils        Int
+  // Set once weighing completes: totalFils + Σ(finalPriceFils - estimatedPriceFils)
+  // over weighed lines. Null until then.
+  finalTotalFils   Int?
   items            OrderItem[]
   deliverySnapshot OrderDeliverySnapshot?
   createdAt        DateTime               @default(now())
@@ -355,6 +358,16 @@ model OrderItem {
   weightGrams        Int?
   prepOptionId       String?
   estimatedPriceFils Int
+  // WEIGHT lines only — snapshotted at checkout so the Weight Adjustment
+  // Engine can recompute finalPriceFils from actualWeightGrams later without
+  // re-deriving from live catalog/store-listing state.
+  basePriceFils         Int?
+  weightModifierPercent Int?
+  prepChargeFils        Int      @default(0)
+  // Set when the store records actual weight.
+  actualWeightGrams   Int?
+  finalPriceFils      Int?
+  varianceBasisPoints Int?
   createdAt          DateTime @default(now())
 }
 

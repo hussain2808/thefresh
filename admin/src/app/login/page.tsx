@@ -8,7 +8,9 @@ export default function LoginPage() {
       type="login"
       title="TheFresh Admin"
       formProps={{
-        initialValues: { email: "", password: "" },
+        // Testing convenience — hardcoded to the seeded admin account
+        // (prisma/seed.ts). Remove before any non-local deployment.
+        initialValues: { email: "test@thefresh.com", password: "password123" },
       }}
     />
   );
